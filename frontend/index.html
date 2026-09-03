@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel — Razorpay Fraud Intelligence</title>
+  <meta name="description" content="Real-time payment fraud detection and ring analysis for Razorpay operations." />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><polygon points='4,28 14,4 28,4 18,28' fill='%230D94FB'/></svg>" />
+</head>
+<body>
+
+<!-- ======================================================================
+     TOP BAR
+     ====================================================================== -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <!-- Razorpay mark: two 45° razor-blade triangles in Razorpay blue -->
+    <svg class="brand-mark" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="3,27 12,3 21,3 12,27" fill="#0D94FB"/>
+      <polygon points="12,27 21,3 27,14 18,27" fill="#0D94FB" opacity="0.35"/>
+    </svg>
+    <span class="brand-name">Sentinel <span>Fraud Intelligence</span></span>
+  </div>
+
+  <div id="status-pill" class="status-pill">
+    <span class="status-dot"></span>
+    <span id="status-text">Idle</span>
+  </div>
+
+  <div class="topbar-actions">
+    <div class="data-mode-toggle" id="data-mode-toggle" title="Toggle data source">
+      <button class="mode-btn active" id="mode-sim" data-mode="simulated">Simulated</button>
+      <button class="mode-btn" id="mode-real" data-mode="realistic">Realistic</button>
+    </div>
+    <button id="btn-stream" class="btn btn-stream">Stream</button>
+    <button id="btn-detect" class="btn btn-primary">Run Detection</button>
+    <button id="btn-demo" class="btn btn-primary" style="background:#10B981;border-color:#10B981">Demo Walkthrough</button>
+    <button id="btn-generate" class="btn btn-ghost">Generate Data</button>
+  </div>
+</header>
+
+<!-- ======================================================================
+     SUB-NAV
+     ====================================================================== -->
+<nav class="subnav">
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-tab="overview">Overview</button>
+    <button class="nav-tab" data-tab="detections">
+      Detections <span id="tab-fraud-count" class="tab-count" style="display:none">0</span>
+    </button>
+    <button class="nav-tab" data-tab="timeline">Timeline</button>
+    <button class="nav-tab" data-tab="metrics">Economics</button>
+    <button class="nav-tab" data-tab="audit">Audit Log</button>
+    <button class="nav-tab" data-tab="resilience">Resilience</button>
+  </div>
+  <div class="nav-search">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="global-search" placeholder="Filter by entity, cluster, IP…" />
+  </div>
+</nav>
+
+<!-- ======================================================================
+     KPI STRIP
+     ====================================================================== -->
+<section class="kpi-strip">
+  <div class="kpi-card" id="kpi-txn">
+    <div class="kpi-label">Transactions</div>
+    <div class="kpi-value" id="kv-txn">—</div>
+    <div class="kpi-sub" id="ks-txn">No data loaded</div>
+  </div>
+  <div class="kpi-card kpi-danger" id="kpi-fraud">
+    <div class="kpi-label">Fraud Rings</div>
+    <div class="kpi-value" id="kv-fraud">—</div>
+    <div class="kpi-sub" id="ks-fraud">Awaiting scan</div>
+  </div>
+  <div class="kpi-card" id="kpi-volume">
+    <div class="kpi-label">Total Volume</div>
+    <div class="kpi-value" id="kv-volume">—</div>
+    <div class="kpi-sub" id="ks-volume">INR equivalent</div>
+  </div>
+  <div class="kpi-card" id="kpi-exposure">
+    <div class="kpi-label">Exposure</div>
+    <div class="kpi-value" id="kv-exposure">—</div>
+    <div class="kpi-sub" id="ks-exposure">Flagged amount</div>
+  </div>
+  <div class="kpi-card" id="kpi-risk" style="border-left:3px solid var(--blue)">
+    <div class="kpi-label">Risk Score</div>
+    <div class="kpi-value" id="kv-risk" style="font-size:36px">--</div>
+    <div class="kpi-sub" id="ks-risk">Loading...</div>
+  </div>
+</section>
+
+<!-- ======================================================================
+     WORKSPACE
+     ====================================================================== -->
+<main class="workspace">
+
+  <!-- ─── OVERVIEW TAB ─────────────────────────────────────────────────── -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="overview-layout">
+
+      <!-- Graph Column -->
+      <div class="graph-column">
+        <div class="graph-toolbar">
+          <span class="graph-title">Entity Relationship Graph</span>
+          <div class="graph-toolbar-right">
+            <select class="graph-filter" id="graph-filter">
+              <option value="all">All nodes</option>
+              <option value="fraud">Fraud only</option>
+              <option value="clusters">Clusters only</option>
+            </select>
+            <button class="tool-btn" id="graph-center">Center</button>
+            <button class="tool-btn" id="graph-zoom-in">+</button>
+            <button class="tool-btn" id="graph-zoom-out">-</button>
+          </div>
+        </div>
+
+        <div class="graph-canvas" id="graph-canvas">
+          <div class="graph-loader" id="graph-loader">
+            <div class="spin"></div>
+            <span id="loader-msg">Run detection to build graph</span>
+          </div>
+          <!-- force-graph mounts a canvas element here -->
+          <div id="graph-mount" style="width:100%;height:100%;"></div>
+        </div>
+
+        <div class="graph-footer">
+          <div class="legend-row">
+            <div class="legend-item"><span class="leg-dot leg-legit"></span>Verified</div>
+            <div class="legend-item"><span class="leg-dot leg-fraud"></span>Flagged</div>
+            <div class="legend-item"><span class="leg-dot" style="background:var(--muted)"></span>Unknown</div>
+            <div class="legend-item"><span class="leg-device"></span>Shared device/IP</div>
+            <div class="legend-item"><span class="leg-pm"></span>Payment fingerprint</div>
+          </div>
+          <span class="graph-meta-count" id="graph-meta">—</span>
+        </div>
+      </div>
+
+      <!-- Sidebar Column -->
+      <div class="sidebar-column">
+        <!-- Live Stream -->
+        <div class="sidebar-section">
+          <div class="sidebar-header">
+            <span class="sidebar-title">
+              <span id="stream-indicator" class="live-dot" style="display:none"></span>
+              Live Stream
+            </span>
+            <span class="stream-eps" id="stream-eps"></span>
+          </div>
+          <div class="stream-console" id="stream-console">
+            <div class="empty-mini">Stream not active — click Stream</div>
+          </div>
+          <div style="padding:6px 10px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--faint)" id="stream-total">Events: 0</span>
+            <button class="link-btn" onclick="document.getElementById('stream-console').innerHTML=''">Clear</button>
+          </div>
+        </div>
+
+        <!-- Quick Hits -->
+        <div class="sidebar-section">
+          <div class="sidebar-header">
+            <span class="sidebar-title">Priority Clusters</span>
+            <span id="quick-count" class="stream-eps">—</span>
+          </div>
+          <div class="quick-list" id="quick-hits">
+            <div class="empty-mini">No detections yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /overview -->
+
+  <!-- ─── DETECTIONS TAB ───────────────────────────────────────────────── -->
+  <div class="tab-content" id="tab-detections">
+    <div class="detections-layout">
+      <div class="filter-bar">
+        <span class="filter-label">Risk:</span>
+        <button class="chip active danger" data-risk-filter="all">All</button>
+        <button class="chip" data-risk-filter="high">High</button>
+        <button class="chip" data-risk-filter="medium">Medium</button>
+        <button class="chip" data-risk-filter="low">Low</button>
+        <span class="filter-label" style="margin-left:8px">Action:</span>
+        <button class="chip active" data-action-filter="all">All</button>
+        <button class="chip" data-action-filter="HOLD_AND_INVESTIGATE">Hold</button>
+        <button class="chip" data-action-filter="FLAG_FOR_REVIEW">Flag</button>
+        <button class="chip" data-action-filter="LOG_PATTERN">Log</button>
+      </div>
+      <div class="det-grid" id="det-grid">
+        <div class="empty-state">
+          <div class="empty-icon">◈</div>
+          <div class="empty-title">No detections yet</div>
+          <div class="empty-body">Run detection to analyze transactions for fraud rings and suspicious clusters.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <<!-- ==========================================================
+     TIMELINE TAB
+     ========================================================== -->
+  <div class="tab-content" id="tab-timeline">
+    <div class="timeline-panel">
+      <div class="panel-header">
+        <span class="panel-title">Transaction &amp; Detection Timeline</span>
+        <div style="display:flex;gap:7px;align-items:center">
+          <select class="graph-filter" id="timeline-granularity">
+            <option value="hour">Hourly</option>
+            <option value="day" selected>Daily</option>
+            <option value="week">Weekly</option>
+          </select>
+          <button class="btn btn-ghost" id="btn-export-timeline" style="padding:4px 10px;font-size:10px">Export SVG</button>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="tl-stats-row" id="tl-stats-row">
+        <div class="tl-stat-card">
+          <div class="tl-stat-label">Total Transactions</div>
+          <div class="tl-stat-value" id="tl-total-txn">&mdash;</div>
+        </div>
+        <div class="tl-stat-card tl-stat-fraud">
+          <div class="tl-stat-label">Fraud Transactions</div>
+          <div class="tl-stat-value" id="tl-fraud-txn">&mdash;</div>
+        </div>
+        <div class="tl-stat-card">
+          <div class="tl-stat-label">Peak Fraud Window</div>
+          <div class="tl-stat-value" id="tl-peak-window" style="font-size:13px">&mdash;</div>
+        </div>
+        <div class="tl-stat-card">
+          <div class="tl-stat-label">Detection Events</div>
+          <div class="tl-stat-value" id="tl-det-events">&mdash;</div>
+        </div>
+      </div>
+
+      <!-- Area chart -->
+      <div class="tl-chart-wrap">
+        <div class="tl-chart-container" id="tl-chart-container">
+          <svg id="timeline-svg" width="100%" height="100%"></svg>
+          <div class="tl-tooltip" id="timeline-tooltip">
+            <div class="tl-tooltip-header" id="tt-header">&mdash;</div>
+            <div class="tl-tooltip-row"><span class="tl-tooltip-label">Transactions</span><span class="tl-tooltip-val" id="tt-txn">&mdash;</span></div>
+            <div class="tl-tooltip-row"><span class="tl-tooltip-label">Total Volume</span><span class="tl-tooltip-val" id="tt-amt">&mdash;</span></div>
+            <div class="tl-tooltip-row"><span class="tl-tooltip-label">Fraud Volume</span><span class="tl-tooltip-val tl-tooltip-danger" id="tt-fraud">&mdash;</span></div>
+          </div>
+          <div class="tl-empty" id="timeline-empty">Run detection to populate timeline</div>
+        </div>
+        <div class="tl-legend">
+          <div class="tl-legend-item"><span class="tl-legend-swatch tl-swatch-total"></span>Total Volume</div>
+          <div class="tl-legend-item"><span class="tl-legend-swatch tl-swatch-fraud"></span>Fraud Volume</div>
+          <div class="tl-legend-item"><span class="tl-legend-swatch tl-swatch-det"></span>Detection Event</div>
+        </div>
+      </div>
+
+      <!-- Detection events below chart -->
+      <div class="tl-events-section" id="tl-events-section">
+        <div class="tl-events-header">Detection Events</div>
+        <div class="tl-events-list" id="tl-events-list">
+          <div class="tl-empty-mini">No detection events yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+     METRICS TAB─────────────────────────────────────── -->
+  <div class="tab-content" id="tab-metrics">
+    <div class="economics-layout">
+      <!-- Confusion Matrix -->
+      <div class="card">
+        <div class="card-title">Confusion Matrix</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--faint);text-align:center;margin-bottom:6px;font-family:var(--font-mono)">Predicted</div>
+        <div class="cm-grid">
+          <div class="cm-axis-label"></div>
+          <div class="cm-axis-label">Fraud</div>
+          <div class="cm-axis-label">Legit</div>
+
+          <div class="cm-axis-label" style="font-size:9px;color:var(--muted)">Actual</div>
+          <div class="cm-cell cm-tp" id="cm-tp">
+            <span class="cm-num" id="cm-tp-val">—</span>
+            <span class="cm-desc">TP</span>
+          </div>
+          <div class="cm-cell cm-fn" id="cm-fn">
+            <span class="cm-num" id="cm-fn-val">—</span>
+            <span class="cm-desc">FN</span>
+          </div>
+
+          <div class="cm-axis-label" style="font-size:9px;color:var(--muted)">Actual</div>
+          <div class="cm-cell cm-fp" id="cm-fp">
+            <span class="cm-num" id="cm-fp-val">—</span>
+            <span class="cm-desc">FP</span>
+          </div>
+          <div class="cm-cell cm-tn" id="cm-tn">
+            <span class="cm-num" id="cm-tn-val">—</span>
+            <span class="cm-desc">TN</span>
+          </div>
+
+          <div class="cm-axis-label"></div>
+          <div class="cm-axis-label" style="font-size:9px">Fraud</div>
+          <div class="cm-axis-label" style="font-size:9px">Legit</div>
+        </div>
+        <div class="cm-perf-row">
+          <div class="cm-perf-item">
+            <span class="cm-perf-val val-good" id="met-precision">—</span>
+            <span class="cm-perf-label">Precision</span>
+          </div>
+          <div class="cm-perf-item">
+            <span class="cm-perf-val val-good" id="met-recall">—</span>
+            <span class="cm-perf-label">Recall</span>
+          </div>
+          <div class="cm-perf-item">
+            <span class="cm-perf-val val-good" id="met-f1">—</span>
+            <span class="cm-perf-label">F1</span>
+          </div>
+          <div class="cm-perf-item">
+            <span class="cm-perf-val" id="met-fpr" style="color:var(--red)">—</span>
+            <span class="cm-perf-label">FPR</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Before/After Comparison -->
+      <div class="card" id="before-after-card" style="grid-column:1/span 2">
+        <div class="card-title">Impact Analysis: Before vs After Ring Sentinel</div>
+        <div id="before-after-content" style="display:grid;grid-template-columns:1fr 60px 1fr;gap:0;align-items:stretch">
+          <div style="padding:20px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface2)">
+            <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--red);margin-bottom:12px">Without Sentinel</div>
+            <div id="ba-before"></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--faint)">&rarr;</div>
+          <div style="padding:20px;border:1px solid var(--blue);border-radius:var(--r-lg);background:rgba(13,148,251,0.04)">
+            <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--blue);margin-bottom:12px">With Sentinel</div>
+            <div id="ba-after"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Held-Out Test Metrics -->
+      <div class="card">
+        <div id="held-out-metrics"></div>
+      </div>
+
+      <!-- Financial Economics -->
+      <div class="card">
+        <div class="card-title">Financial Economics</div>
+        <div class="metric-rows" id="economics-rows">
+          <div class="metric-row">
+            <span class="metric-name">Detection Rate</span>
+            <span class="metric-val val-warn" id="ec-detection-rate">—</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Avg. Ring Size</span>
+            <span class="metric-val" id="ec-avg-size">—</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Avg. Confidence</span>
+            <span class="metric-val val-good" id="ec-avg-conf">—</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Total Transactions</span>
+            <span class="metric-val" id="ec-total-txn">—</span>
+          </div>
+        </div>
+        <div class="cost-section" id="cost-section">
+          <div class="cost-row">
+            <span>Fraud exposure (est.)</span>
+            <span class="cost-val-neg" id="cost-exposure">—</span>
+          </div>
+          <div class="cost-row">
+            <span>Value at risk (FN)</span>
+            <span class="cost-val-neg" id="cost-fn">—</span>
+          </div>
+          <div class="cost-row">
+            <span>FP review cost</span>
+            <span class="cost-val-neg" id="cost-fp">—</span>
+          </div>
+          <div class="cost-total">
+            <span>Net value saved (est.)</span>
+            <span class="cost-val-pos" id="cost-net">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── AUDIT TAB ────────────────────────────────────────────────────── -->
+  <div class="tab-content" id="tab-audit">
+    <div class="audit-layout">
+      <div class="panel-header" style="margin-bottom:10px">
+        <span class="panel-title">Detection Audit Log</span>
+        <div style="display:flex;gap:7px">
+          <button class="btn btn-ghost" id="btn-export-csv" style="padding:4px 10px;font-size:10px">⇣ Export CSV</button>
+          <button class="btn btn-ghost" id="btn-clear-audit" style="padding:4px 10px;font-size:10px">✕ Clear</button>
+        </div>
+      </div>
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Cluster</th>
+            <th>Action</th>
+            <th>Confidence</th>
+            <th>Entities</th>
+            <th>Amount (est.)</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody">
+          <tr>
+            <td colspan="7" style="text-align:center;padding:32px;color:var(--faint);font-family:var(--font-mono);font-size:11px">No audit entries yet</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── RESILIENCE TAB ───────────────────────────────────────────────── -->
+  <div class="tab-content" id="tab-resilience">
+    <div style="padding:20px 28px">
+      <div class="panel-header">
+        <span class="panel-title">Adversarial Resilience Patterns</span>
+      </div>
+
+      <div class="resilience-grid">
+      <div class="resilience-card">
+        <div class="res-title">▲ Velocity Burst</div>
+        <div class="res-detail">Attacker makes 50+ rapid small transactions across 3 devices inside a 2-minute window — stays below per-device rate limits but creates detectable shared-IP signature.</div>
+        <div class="res-response">
+          <div class="res-response-label">Detection Signal</div>
+          <div class="res-response-body">Temporal clustering within ±5-minute window catches shared velocity even when individual device thresholds are not crossed. Ring confidence elevates via payment-fingerprint overlap.</div>
+        </div>
+      </div>
+
+      <div class="resilience-card">
+        <div class="res-title">▲ Mule Network Rotation</div>
+        <div class="res-detail">Fraudster rotates payment destinations across synthetic KYC accounts, changing IPs via residential proxies each transaction. Same device fingerprint hash persists.</div>
+        <div class="res-response">
+          <div class="res-response-label">Detection Signal</div>
+          <div class="res-response-body">Graph construction edges on device fingerprint survive IP rotation. Community detection isolates nodes whose only common link is a shared device hash; isolation-forest anomaly score flags the cluster.</div>
+        </div>
+      </div>
+
+      <div class="resilience-card">
+        <div class="res-title">▲ Slow-Burn Synthetic Fraud</div>
+        <div class="res-detail">Low-frequency fraud (1–2 txns/day) from synthetic accounts aged 6+ months. Designed to evade temporal velocity checks.</div>
+        <div class="res-response">
+          <div class="res-response-label">Detection Signal</div>
+          <div class="res-response-body">Logistic regression model trained on account-age, MCC pattern, and payment-fingerprint reuse. Payment-fingerprint shared across >2 accounts with no legitimate co-transaction history triggers ring formation even at low velocity.</div>
+        </div>
+      </div>
+
+      <div class="resilience-card">
+        <div class="res-title">▲ Split-Amount Structuring</div>
+        <div class="res-detail">Large fraud split into sub-₹5000 transactions to stay below high-value monitoring thresholds. Executed by coordinated ring across 8–12 entities.</div>
+        <div class="res-response">
+          <div class="res-response-label">Detection Signal</div>
+          <div class="res-response-body">Ring detector aggregates cluster-level total exposure rather than per-transaction amount. Ring nodes with shared UPI handle pattern and same device fingerprint are connected; sum of cluster transactions reveals structuring.</div>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ======================================================================
+     FOOTER
+     ====================================================================== -->
+<footer class="app-footer">
+  <span>Razorpay Sentinel · Fraud Intelligence Platform</span>
+  <span id="footer-run-time">—</span>
+  <span class="footer-tag">v2.0</span>
+</footer>
+
+<!-- ======================================================================
+     GENERATE DATA MODAL
+     ====================================================================== -->
+<div class="modal-backdrop" id="gen-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Generate Transaction Data</span>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Transactions</label>
+          <input type="number" class="form-input" id="gen-count" value="1000" min="100" max="50000" />
+          <span class="form-hint">100–50000</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Fraud Rings</label>
+          <input type="number" class="form-input" id="gen-rings" value="5" min="1" max="50" />
+          <span class="form-hint">1–50</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Ring Size</label>
+          <input type="number" class="form-input" id="gen-ring-size" value="8" min="3" max="40" />
+          <span class="form-hint">Entities per ring</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Noise Level</label>
+          <select class="form-input" id="gen-noise">
+            <option value="0.02">Low (2%)</option>
+            <option value="0.05" selected>Medium (5%)</option>
+            <option value="0.12">High (12%)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Attack Pattern</label>
+        <select class="form-input" id="gen-pattern">
+          <option value="standard">Standard mixed</option>
+          <option value="velocity">Velocity burst</option>
+          <option value="mule">Mule rotation</option>
+          <option value="structured">Structured splitting</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Generate &amp; Load</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================
+     FRAUD ALERT OVERLAY
+     ====================================================================== -->
+<div class="alert-overlay" id="alert-overlay">
+  <div class="alert-box">
+    <div class="alert-flag">FRAUD DETECTED</div>
+    <div class="alert-title" id="alert-title">Ring Identified</div>
+    <div class="alert-cluster" id="alert-cluster">Cluster ID: —</div>
+    <div class="alert-conf-row">
+      <span class="alert-conf-label">Confidence</span>
+      <span class="alert-conf-val" id="alert-conf">—</span>
+    </div>
+    <div class="alert-evidence-box" id="alert-evidence">—</div>
+    <div class="alert-action-tag" id="alert-action">ACTION</div>
+    <button class="alert-dismiss" id="alert-dismiss">Dismiss</button>
+  </div>
+</div>
+
+<!-- ======================================================================
+     ENTITY DRAWER
+     ====================================================================== -->
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<aside class="entity-drawer" id="entity-drawer">
+  <div class="drawer-head">
+    <div>
+      <div class="drawer-badge" id="drawer-badge">Entity</div>
+      <div class="drawer-entity-id" id="drawer-id">—</div>
+    </div>
+    <button class="drawer-close" id="drawer-close">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div>
+      <div class="drawer-section-label">Attributes</div>
+      <div class="info-grid" id="drawer-attrs"></div>
+    </div>
+    <div>
+      <div class="drawer-section-label">Risk Assessment</div>
+      <div class="action-block" id="drawer-risk-block">—</div>
+    </div>
+    <div>
+      <div class="drawer-section-label">Connected Entities</div>
+      <div id="drawer-connections" style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">—</div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-ghost" id="drawer-flag-btn">Flag</button>
+    <button class="btn btn-primary" id="drawer-inspect-btn">Deep Scan</button>
+  </div>
+</aside>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ======================================================================
+     SCRIPTS
+     ====================================================================== -->
+<!-- force-graph (same rendering engine as react-force-graph-2d, vanilla JS) -->
+<script src="/js/d3.v7.min.js?v=1"></script>
+  <script src="https://unpkg.com/force-graph@1.43.5/dist/force-graph.min.js"></script>
+<script src="/js/graph-viz.js?v=20"></script>
+<script src="/js/metrics.js?v=14"></script>
+<script src="/js/audit-log.js?v=14"></script>
+<script src="/js/app.js?v=26"></script>
+
+
+<!-- Demo Walkthrough Overlay -->
+<div id="demo-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(2px)">
+  <!-- Spotlight cutout -->
+  <div id="demo-spotlight" style="position:absolute;border:2px solid #10B981;border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,0.55);transition:all 0.5s ease;pointer-events:none;z-index:1"></div>
+  
+  <!-- Step tooltip -->
+  <div id="demo-tooltip" style="position:absolute;z-index:2;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:380px;padding:24px;transition:all 0.4s ease;border:1px solid #E2E6EB">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span id="demo-step-badge" style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#10B981;background:rgba(16,185,129,0.08);padding:4px 10px;border-radius:4px"></span>
+      <span id="demo-step-counter" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8899A8"></span>
+    </div>
+    <h3 id="demo-step-title" style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#1A2733;margin-bottom:8px;line-height:1.3"></h3>
+    <p id="demo-step-desc" style="font-size:13px;color:#3E4B5A;line-height:1.6;margin-bottom:16px"></p>
+    <div id="demo-step-metric" style="display:none;padding:10px 14px;background:#F0F2F5;border-radius:8px;margin-bottom:16px;border-left:3px solid #10B981"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <button id="demo-prev" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8899A8;background:none;border:1px solid #E2E6EB;padding:6px 14px;border-radius:6px;cursor:pointer;transition:all 0.15s">Back</button>
+      <div style="display:flex;gap:6px" id="demo-dots"></div>
+      <button id="demo-next" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#fff;background:#0D94FB;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;transition:all 0.15s">Next</button>
+    </div>
+    <button id="demo-close" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:18px;color:#8899A8;cursor:pointer;line-height:1">&times;</button>
+  </div>
+</div>
+</body>
+</html>

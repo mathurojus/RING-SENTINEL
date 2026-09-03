@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel — Sign In</title>
+  <link rel="stylesheet" href="/css/auth.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><polygon points='4,28 14,4 28,4 18,28' fill='%230D94FB'/></svg>" />
+</head>
+<body>
+
+<div class="auth-layout">
+  <!-- Left: branding panel -->
+  <div class="auth-brand">
+    <div class="auth-brand-inner">
+      <svg class="brand-mark" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="6,52 22,6 44,6 28,52" fill="#0D94FB"/>
+        <polygon points="22,52 44,6 54,28 36,52" fill="#0D94FB" opacity="0.3"/>
+      </svg>
+      <h1 class="brand-name">Sentinel</h1>
+      <p class="brand-tagline">Fraud Intelligence Platform</p>
+      <div class="brand-divider"></div>
+      <ul class="brand-features">
+        <li>Graph-based fraud ring detection</li>
+        <li>Real-time transaction monitoring</li>
+        <li>Explainable ML scoring</li>
+        <li>Bounded actions with audit trail</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Right: auth forms -->
+  <div class="auth-panel">
+    <div class="auth-card">
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth="signin">Sign In</button>
+        <button class="auth-tab" data-auth="signup">Sign Up</button>
+      </div>
+
+      <!-- Sign In Form -->
+      <form class="auth-form active" id="signin-form">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="signin-email" placeholder="you@company.com" autocomplete="email" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="signin-password" placeholder="Enter your password" autocomplete="current-password" required />
+        </div>
+        <div class="form-row-inline">
+          <label class="checkbox-label">
+            <input type="checkbox" id="remember-me" />
+            <span>Remember me</span>
+          </label>
+          <a href="#" class="form-link">Forgot password?</a>
+        </div>
+        <button type="submit" class="btn-primary" id="signin-btn">Sign In</button>
+        <div class="auth-divider"><span>or</span></div>
+        <button type="button" class="btn-sso" id="sso-btn">Continue with SSO</button>
+      </form>
+
+      <!-- Sign Up Form -->
+      <form class="auth-form" id="signup-form">
+        <div class="form-row-split">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input type="text" class="form-input" id="signup-first" placeholder="First name" autocomplete="given-name" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input type="text" class="form-input" id="signup-last" placeholder="Last name" autocomplete="family-name" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Work Email</label>
+          <input type="email" class="form-input" id="signup-email" placeholder="you@company.com" autocomplete="email" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="signup-password" placeholder="Min 8 characters" autocomplete="new-password" required minlength="8" />
+          <div class="password-strength" id="password-strength">
+            <div class="strength-bar" id="strength-bar"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-input" id="signup-role">
+            <option value="analyst">Fraud Analyst</option>
+            <option value="engineer">Security Engineer</option>
+            <option value="manager">Risk Manager</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary" id="signup-btn">Create Account</button>
+      </form>
+
+      <div class="auth-footer">
+        By continuing, you agree to Sentinel's <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Tab switching
+  const tabs = document.querySelectorAll('.auth-tab');
+  const forms = document.querySelectorAll('.auth-form');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.getAttribute('data-auth');
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      forms.forEach(f => f.classList.remove('active'));
+      document.getElementById(`${target}-form`).classList.add('active');
+    });
+  });
+
+  // Sign In
+  document.getElementById('signin-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('signin-btn');
+    btn.textContent = 'Signing in...';
+    btn.disabled = true;
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 600);
+  });
+
+  // Sign Up
+  document.getElementById('signup-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('signup-btn');
+    btn.textContent = 'Creating account...';
+    btn.disabled = true;
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 800);
+  });
+
+  // SSO
+  document.getElementById('sso-btn').addEventListener('click', () => {
+    window.location.href = '/dashboard';
+  });
+
+  // Password strength
+  const pwInput = document.getElementById('signup-password');
+  const strengthBar = document.getElementById('strength-bar');
+  if (pwInput && strengthBar) {
+    pwInput.addEventListener('input', () => {
+      const v = pwInput.value;
+      let s = 0;
+      if (v.length >= 8) s++;
+      if (/[A-Z]/.test(v)) s++;
+      if (/[0-9]/.test(v)) s++;
+      if (/[^A-Za-z0-9]/.test(v)) s++;
+      const pct = (s / 4) * 100;
+      strengthBar.style.width = pct + '%';
+      strengthBar.className = 'strength-bar ' + (s <= 1 ? 'weak' : s <= 2 ? 'fair' : s <= 3 ? 'good' : 'strong');
+    });
+  }
+});
+</script>
+
+</body>
+</html>
