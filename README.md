@@ -1,4 +1,4 @@
-# 🔴 Ring Sentinel — Coordinated Fraud Ring Detector
+#  Ring Sentinel - Coordinated Fraud Ring Detector
 
 **Track 02: AI Risk Manager** | Defense-only fraud detection with honest metrics
 
