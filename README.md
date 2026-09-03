@@ -4,6 +4,22 @@
 
 Ring Sentinel detects coordinated abuse rings exploiting merchant promos, referrals, and returns. Unlike traditional transaction-level fraud detectors, it analyzes **relationships between entities** (shared devices, IPs, payment methods, timing) to surface coordinated fraud.
 
+## Demo Video
+
+Watch the full walkthrough of Ring Sentinel in action:
+
+[![Ring Sentinel Demo](https://img.shields.io/badge/Watch-Demo_Video-red?style=for-the-badge&logo=youtube)](https://youtu.be/b_N_ok3SzeQ)
+
+The demo covers:
+- Generating synthetic transaction data with injected fraud rings
+- Entity relationship graph showing coordinated fraud clusters
+- Detection pipeline with pattern classification (Shared Infrastructure, Mule Rotation, Bonus Farming)
+- Bounded actions (Hold Payout, Flag & Verify, Log Only)
+- Evaluation metrics: Precision, Recall, F1, False-Positive Cost
+- Adversarial resilience patterns
+- Graceful failure handling
+
+
 ## Architecture
 
 ```
